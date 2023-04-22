@@ -9,7 +9,7 @@ from timeit import default_timer as timer
 # Stores all the post transaction in the node
 request_tx = []
 #store filename
-files = {}
+files = []
 #destiantion for upload files
 UPLOAD_FOLDER = "app/static/Uploads"
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
@@ -50,9 +50,9 @@ def submit():
     #save the uploaded file in destination
     up_file.save(os.path.join("app/static/Uploads/",secure_filename(up_file.filename)))
     #add the file to the list to create a download link
-    files[up_file.filename] = os.path.join(app.root_path, "static" , "Uploads", up_file.filename)
+    files.append([up_file.filename, os.path.join(app.root_path, "static" , "Uploads", up_file.filename)])
     #determines the size of the file uploaded in bytes 
-    file_states = os.stat(files[up_file.filename]).st_size 
+    file_states = os.stat(os.path.join(app.root_path, "static" , "Uploads", up_file.filename)).st_size 
     #create a transaction object
     post_object = {
         "user": user, #user name
@@ -71,5 +71,18 @@ def submit():
 #creates a download link for the file
 @app.route("/submit/<string:variable>",methods = ["GET"])
 def download_file(variable):
-    p = files[variable]
-    return send_file(p,as_attachment=True)
+    # p = files[variable]
+    # 查询id转化为数字型id
+    # dot_id = 0
+    # while dot_id < len(variable) and variable[dot_id] != '.':
+    #     dot_id += 1
+    # file_v_id = int(variable[0:dot_id])
+    l = 0
+    r = len(files)
+    while l < r:
+        m = (r + l) >> 1
+        if variable >= files[m][0]:
+            r = m
+        else:
+            l = m + 1
+    return send_file(files[l][1],as_attachment=True)
