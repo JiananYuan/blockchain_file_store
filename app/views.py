@@ -85,4 +85,6 @@ def download_file(variable):
             r = m
         else:
             l = m + 1
+    if files[l][0] != variable:
+        return
     return send_file(files[l][1],as_attachment=True)
