@@ -45,7 +45,6 @@ def mine_uncofirmed_transactions():
         return "Block #{0} mined successfully.".format(result)
     else:
         return "No pending transactions to mine."
-    
 
 
 @app.route("/pending_tx")
