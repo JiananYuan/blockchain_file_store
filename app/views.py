@@ -248,6 +248,38 @@ def submit():
     return redirect("/")
 
 
+@app.route("/batch_load")
+def batch_load():
+    start = timer()
+    user = 'test_user'
+    for filename in os.listdir(r'C:\Users\Jiananyuan\Downloads\Test_File_Upload'):
+        rf = open(r'C:\Users\Jiananyuan\Downloads\Test_File_Upload' + '\\' + filename)
+        wf = open(os.path.join('app/static/Uploads/', secure_filename(filename)), 'w')
+        # save the uploaded file in destination
+        rf_content = rf.readline()
+        wf.write(rf_content)
+        wf.close()
+        rf.close()
+        # add the file to the list to create a download link
+        # print('submit file: ', up_file.filename)
+        files.append([filename, os.path.join(app.root_path, "static", "Uploads", filename)])
+        # determines the size of the file uploaded in bytes
+        file_states = os.stat(os.path.join(app.root_path, "static", "Uploads", filename)).st_size
+        # create a transaction object
+        post_object = {
+            "user": user,  # user name
+            "v_file": filename,  # filename
+            "file_data": rf_content,  # file data
+            "file_size": file_states  # file size
+        }
+        # Submit a new transaction
+        address = "{0}/new_transaction".format(ADDR)
+        requests.post(address, json=post_object)
+    end = timer()
+    print(end - start)
+    return redirect("/")
+
+
 # creates a download link for the file
 @app.route("/submit/<string:variable>", methods=["GET"])
 def download_file(variable):
