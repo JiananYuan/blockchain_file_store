@@ -258,19 +258,20 @@ def download_file(variable):
     #     dot_id += 1
     # file_v_id = int(variable[0:dot_id])
     if learn:
-        print('using learn!')
         l = 0
         r = len(segs)
         while l < r:
             m = (r + l) // 2
-            if float(variable) <= segs[m].x:
+            if int(variable) <= segs[m].x:
                 r = m
             else:
                 l = m + 1
-        if segs[l].x <= float(variable):
+        if segs[l].x > int(variable) and l > 0:
+            l -= 1
+        if segs[l].x <= int(variable):
             pos = segs[l].k * float(variable) + segs[l].b
             low_bound = max(math.floor(pos - err), 0)
-            up_bound = min(math.ceil(pos + err), len(segs) - 1)
+            up_bound = min(math.ceil(pos + err), len(files) - 1)
             l = int(low_bound)
             r = int(up_bound)
             while l < r:
@@ -279,12 +280,12 @@ def download_file(variable):
                     r = m
                 else:
                     l = m + 1
-            if files[l] == variable:
+            if files[l][0] == variable:
                 return send_file(files[l][1], as_attachment=True)
             else:
-                return 'files[l] != variable'
+                return 'files[l][0] != variable'
         else:
-            return 'segs[l] > variable'
+            return 'segs[l].x > variable'
     else:
         l = 0
         r = len(files)
