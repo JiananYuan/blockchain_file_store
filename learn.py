@@ -5,7 +5,7 @@ class Point:
 
 
 class Line:
-    def __int__(self, a, b):
+    def __init__(self, a, b):
         self.a = a
         self.b = b
 

@@ -5,162 +5,11 @@ from flask import render_template, redirect, request, send_file
 from werkzeug.utils import secure_filename
 from app import app
 from timeit import default_timer as timer
-# from learn import PLR, Segment
+from learn import PLR, Segment
 import numpy as np
 import math
+from random import sample
 
-
-class Point:
-    def __init__(self, x, y):
-        self.x = x
-        self.y = y
-
-
-class Line:
-    def __init__(self, a, b):
-        self.a = a
-        self.b = b
-
-
-class Segment:
-    def __init__(self, x, k, b, x2):
-        self.x = x
-        self.k = k
-        self.b = b
-        self.x2 = x2
-
-
-def get_slope(p1: Point, p2: Point) -> float:
-    return (p2.y - p1.y) / (p2.x - p1.x)
-
-
-def get_line(p1: Point, p2: Point) -> Line:
-    a = get_slope(p1, p2)
-    b = -a * p1.x + p1.y
-    return Line(a=a, b=b)
-
-
-def get_intersection(l1: Line, l2: Line) -> Point:
-    a, b, c, d = l1.a, l2.a, l1.b, l2.b
-    x = (d - c) / (a - b)
-    y = (a * d - b * c) / (a - b)
-    return Point(x=x, y=y)
-
-
-def is_above(pt: Point, l: Line) -> bool:
-    return pt.y > l.a * pt.x + l.b
-
-
-def is_below(pt: Point, l: Line) -> bool:
-    return pt.y < l.a * pt.x + l.b
-
-
-def get_upper_bound(pt: Point, gamma: float) -> Point:
-    return Point(x=pt.x, y=pt.y + gamma)
-
-
-def get_lower_bound(pt: Point, gamma: float) -> Point:
-    return Point(x=pt.x, y=pt.y - gamma)
-
-
-class GreedyPLR:
-    def __init__(self, gamma: float):
-        self.state = "need2"
-        self.gamma = gamma
-        self.s0 = None
-        self.s1 = None
-        self.rho_lower = None
-        self.rho_upper = None
-        self.sint = None
-        self.last_pt = None
-
-    def process(self, pt):
-        self.last_pt = pt
-        if self.state == "need2":
-            self.s0 = pt
-            self.state = "need1"
-        elif self.state == "need1":
-            self.s1 = pt
-            self.setup()
-            self.state = "ready"
-        elif self.state == "ready":
-            return self.process__(pt)
-        else:
-            # impossible
-            print("ERROR in process")
-        s = Segment(0, 0, 0, 0)
-        return s
-
-    def setup(self):
-        self.rho_lower = get_line(get_upper_bound(self.s0, self.gamma),
-                                  get_lower_bound(self.s1, self.gamma))
-        self.rho_upper = get_line(get_lower_bound(self.s0, self.gamma),
-                                  get_upper_bound(self.s1, self.gamma))
-        self.sint = get_intersection(self.rho_upper, self.rho_lower)
-
-    def current_segment(self):
-        segment_start = self.s0.x
-        avg_slope = (self.rho_lower.a + self.rho_upper.a) / 2.0
-        intercept = -avg_slope * self.sint.x + self.sint.y
-        s = Segment(segment_start, avg_slope, intercept, int(self.last_pt.x))
-        return s
-
-    def process__(self, pt):
-        if not (is_above(pt, self.rho_lower) and is_below(pt, self.rho_upper)):
-            prev_segment = self.current_segment()
-            self.s0 = pt
-            self.state = "need1"
-            return prev_segment
-
-        s_upper = get_upper_bound(pt, self.gamma)
-        s_lower = get_lower_bound(pt, self.gamma)
-        if is_below(s_upper, self.rho_upper):
-            self.rho_upper = get_line(self.sint, s_upper)
-        if is_above(s_lower, self.rho_lower):
-            self.rho_lower = get_line(self.sint, s_lower)
-        s = Segment(0, 0, 0, 0)
-        return s
-
-    def finish(self):
-        s = Segment(0, 0, 0, 0)
-        if self.state == "need2":
-            self.state = "finished"
-            return s
-        elif self.state == "need1":
-            self.state = "finished"
-            s.x = self.s0.x
-            s.k = 0
-            s.b = self.s0.y
-            s.x2 = self.last_pt.x
-            return s
-        elif self.state == "ready":
-            self.state = "finished"
-            return self.current_segment()
-        else:
-            print("ERROR in finish")
-            return s
-
-
-class PLR:
-    def __init__(self, gamma):
-        self.gamma = gamma
-        self.segments = []
-
-    def train(self, keys):
-        plr = GreedyPLR(self.gamma)
-        size = len(keys)
-        for i in range(size):
-            seg = plr.process(Point(float(keys[i]), i))
-            if seg.x != 0 or seg.k != 0 or seg.b != 0:
-                self.segments.append(seg)
-
-        last = plr.finish()
-        if last.x != 0 or last.k != 0 or last.b != 0:
-            self.segments.append(last)
-        return self.segments
-
-
-# Stores all the post transaction in the node
 request_tx = []
 # store filename
 files = []
@@ -172,6 +21,7 @@ ADDR = "http://127.0.0.1:8800"
 learn = False
 segs = []
 err = 8
+M = 1000000
 
 
 # create a list of requests that peers has send to upload files
@@ -188,6 +38,9 @@ def get_tx_req():
                 trans["hash"] = block["prev_hash"]
                 content.append(trans)
         request_tx = sorted(content, key=lambda k: k["hash"], reverse=True)
+        if len(request_tx) > 0:
+            # 先默认大于10000个文件
+            request_tx = sample(request_tx, 10000)
 
 
 @app.route("/learn")
@@ -199,13 +52,23 @@ def learned_index():
         return "No files to learn!"
 
     size = len(files)
-    temp = int(files[size - 1][0])
     segs = plr.train(np.array(files)[:, 0])
     if len(segs) == 0:
         return "No Segments!"
-    segs.append(Segment(temp, 0, 0, 0))
+    segs.append(Segment(int(files[size - 1][0]), 0, size - 1, 0))
     learn = True
     return "Finish learning!"
+
+
+@app.route("/switch")
+def unlearned_index():
+    global learn
+    learn = not learn
+    if learn and segs != []:
+        return "enable learn"
+    else:
+        return "Disable learning!"
+
 
 # Loads and runs the home page
 @app.route("/")
@@ -250,33 +113,48 @@ def submit():
 
 @app.route("/batch_load")
 def batch_load():
-    start = timer()
     user = 'test_user'
-    for filename in os.listdir(r'C:\Users\Jiananyuan\Downloads\Test_File_Upload'):
-        rf = open(r'C:\Users\Jiananyuan\Downloads\Test_File_Upload' + '\\' + filename)
-        wf = open(os.path.join('app/static/Uploads/', secure_filename(filename)), 'w')
-        # save the uploaded file in destination
-        rf_content = rf.readline()
-        wf.write(rf_content)
-        wf.close()
-        rf.close()
+    for idx in range(0, 20000):
+        filename = str(idx)
+        filename = filename.zfill(10)
         # add the file to the list to create a download link
         # print('submit file: ', up_file.filename)
-        files.append([filename, os.path.join(app.root_path, "static", "Uploads", filename)])
+        files.append([filename, 'C:/Users/Jiananyuan/Downloads/Uploads/' + filename])
         # determines the size of the file uploaded in bytes
-        file_states = os.stat(os.path.join(app.root_path, "static", "Uploads", filename)).st_size
+        file_states = 4
         # create a transaction object
         post_object = {
             "user": user,  # user name
             "v_file": filename,  # filename
-            "file_data": rf_content,  # file data
+            "file_data": 'test',  # file data
             "file_size": file_states  # file size
         }
         # Submit a new transaction
         address = "{0}/new_transaction".format(ADDR)
         requests.post(address, json=post_object)
-    end = timer()
-    print(end - start)
+    # for filename in os.listdir(r'C:\Users\Jiananyuan\Downloads\origin2'):
+    #     rf = open(r'C:\Users\Jiananyuan\Downloads\origin2' + '\\' + filename)
+    #     wf = open(os.path.join('app/static/Uploads/', secure_filename(filename)), 'w')
+    #     # save the uploaded file in destination
+    #     rf_content = rf.readline()
+    #     wf.write(rf_content)
+    #     wf.close()
+    #     rf.close()
+    #     # add the file to the list to create a download link
+    #     # print('submit file: ', up_file.filename)
+    #     files.append([filename, os.path.join(app.root_path, "static", "Uploads", filename)])
+    #     # determines the size of the file uploaded in bytes
+    #     file_states = os.stat(os.path.join(app.root_path, "static", "Uploads", filename)).st_size
+    #     # create a transaction object
+    #     post_object = {
+    #         "user": user,  # user name
+    #         "v_file": filename,  # filename
+    #         "file_data": rf_content,  # file data
+    #         "file_size": file_states  # file size
+    #     }
+    #     # Submit a new transaction
+    #     address = "{0}/new_transaction".format(ADDR)
+    #     requests.post(address, json=post_object)
     return redirect("/")
 
 
@@ -289,6 +167,10 @@ def download_file(variable):
     # while dot_id < len(variable) and variable[dot_id] != '.':
     #     dot_id += 1
     # file_v_id = int(variable[0:dot_id])
+    wf = open('C:/Users/Jiananyuan/Downloads/Uploads/' + variable.zfill(10), 'w')
+    wf.write('test')
+    wf.close()
+    st = timer()
     if learn:
         l = 0
         r = len(segs)
@@ -313,20 +195,29 @@ def download_file(variable):
                 else:
                     l = m + 1
             if files[l][0] == variable:
+                en = timer()
+                print('lookup time using learn model:', en - st)
                 return send_file(files[l][1], as_attachment=True)
             else:
                 return 'files[l][0] != variable'
         else:
             return 'segs[l].x > variable'
     else:
-        l = 0
-        r = len(files)
-        while l < r:
-            m = (r + l) // 2
-            if variable <= files[m][0]:
-                r = m
-            else:
-                l = m + 1
-        if files[l][0] != variable:
-            return 'files[l][0] != variable'
-        return send_file(files[l][1], as_attachment=True)
+        # l = 0
+        # r = len(files)
+        # while l < r:
+        #     m = (r + l) // 2
+        #     if variable <= files[m][0]:
+        #         r = m
+        #     else:
+        #         l = m + 1
+        # if files[l][0] != variable:
+        #     return 'files[l][0] != variable'
+        m = 0
+        for i in range(0, len(files)):
+            if files[i][0] == variable:
+                m = i
+                break
+        en = timer()
+        print('lookup time using binary search:', en - st)
+        return send_file(files[m][1], as_attachment=True)
